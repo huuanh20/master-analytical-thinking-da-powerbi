@@ -46,6 +46,27 @@ using (var scope = app.Services.CreateScope())
 
 app.UseCors("AllowAll");
 
+// Support HEAD requests (for uptime monitoring tools like UptimeRobot)
+app.Use(async (context, next) =>
+{
+    if (HttpMethods.IsHead(context.Request.Method))
+    {
+        context.Request.Method = HttpMethods.Get;
+        var originalBody = context.Response.Body;
+        context.Response.Body = System.IO.Stream.Null;
+        try
+        {
+            await next();
+        }
+        finally
+        {
+            context.Response.Body = originalBody;
+        }
+        return;
+    }
+    await next();
+});
+
 // Minimal APIs configuration
 app.MapGet("/api/lectures", async (IMediator mediator) =>
 {
