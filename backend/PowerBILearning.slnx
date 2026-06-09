@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/1.Domain/">
+    <Project Path="src/1.Domain/PowerBILearning.Domain.csproj" />
+  </Folder>
+  <Folder Name="/src/2.Application/">
+    <Project Path="src/2.Application/PowerBILearning.Application.csproj" />
+  </Folder>
+  <Folder Name="/src/3.Infrastructure/">
+    <Project Path="src/3.Infrastructure/PowerBILearning.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/4.WebApi/">
+    <Project Path="src/4.WebApi/PowerBILearning.WebApi.csproj" />
+  </Folder>
+</Solution>

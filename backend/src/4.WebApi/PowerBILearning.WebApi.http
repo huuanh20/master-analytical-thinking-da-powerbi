@@ -1,0 +1,6 @@
+@PowerBILearning.WebApi_HostAddress = http://localhost:5030
+
+GET {{PowerBILearning.WebApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
