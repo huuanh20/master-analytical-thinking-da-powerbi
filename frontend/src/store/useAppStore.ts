@@ -21,6 +21,7 @@ interface AppState {
   updateLectureStatus: (id: string, status: CourseStatus) => Promise<void>;
   saveLectureNote: (id: string, content: string) => Promise<void>;
   uploadLecture: (title: string, lectureNumber: string, file: File) => Promise<void>;
+  deleteLecture: (id: string) => Promise<void>;
 }
 
 const mapStatusFromBE = (statusNum: number): CourseStatus => {
@@ -147,6 +148,26 @@ export const useAppStore = create<AppState>((set, get) => ({
       console.error('Failed to upload PDF', err);
       set({ error: 'Failed to upload PDF. Please make sure the Lecture Code is unique.', isLoading: false });
       throw err;
+    }
+  },
+
+  deleteLecture: async (id) => {
+    set({ isLoading: true, error: null });
+    try {
+      await api.delete(`/lectures/${id}`);
+      
+      set((state) => {
+        const updatedLectures = state.lectures.filter((l) => l.id !== id);
+        let updatedActive = state.activeLecture;
+        if (state.activeLecture && state.activeLecture.id === id) {
+          // If deleted active lecture, select the first remaining one or null
+          updatedActive = updatedLectures.length > 0 ? updatedLectures[0] : null;
+        }
+        return { lectures: updatedLectures, activeLecture: updatedActive, isLoading: false };
+      });
+    } catch (err) {
+      console.error('Failed to delete lecture', err);
+      set({ error: 'Failed to delete lecture. Please try again.', isLoading: false });
     }
   },
 }));

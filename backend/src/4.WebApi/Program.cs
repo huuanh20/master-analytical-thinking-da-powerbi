@@ -89,6 +89,13 @@ app.MapPost("/api/lectures/{id:guid}/notes", async (Guid id, SaveNoteRequest req
     return success ? Results.Ok(new { Message = "Note saved successfully" }) : Results.NotFound();
 });
 
+app.MapDelete("/api/lectures/{id:guid}", async (Guid id, IMediator mediator) =>
+{
+    var command = new DeleteLectureCommand(id);
+    var success = await mediator.Send(command);
+    return success ? Results.Ok(new { Message = "Lecture deleted successfully" }) : Results.NotFound();
+});
+
 app.MapGet("/api/lectures/{id:guid}/pdf", async (Guid id, IMediator mediator) =>
 {
     var query = new GetLecturePdfQuery(id);

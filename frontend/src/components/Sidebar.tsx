@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import type { CourseStatus } from '../types';
-import { Search, GraduationCap, ChevronLeft, CheckCircle2, Circle, PlayCircle, Plus, X, FileUp } from 'lucide-react';
+import { Search, GraduationCap, ChevronLeft, CheckCircle2, Circle, PlayCircle, Plus, X, FileUp, Trash2 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
   const {
@@ -15,6 +15,7 @@ export const Sidebar: React.FC = () => {
     setActiveLecture,
     toggleSidebar,
     uploadLecture,
+    deleteLecture,
   } = useAppStore();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -25,6 +26,13 @@ export const Sidebar: React.FC = () => {
   const [uploadError, setUploadError] = useState('');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDeleteClick = async (e: React.MouseEvent, id: string, title: string) => {
+    e.stopPropagation();
+    if (window.confirm(`Are you sure you want to delete "${title}"?`)) {
+      await deleteLecture(id);
+    }
+  };
 
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -186,8 +194,18 @@ export const Sidebar: React.FC = () => {
                     <span className="lecture-meta">Lecture File</span>
                   </div>
                 </div>
-                {getStatusIcon(lecture.status)}
-              </li>
+                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                   {getStatusIcon(lecture.status)}
+                   <button 
+                     className="delete-item-btn" 
+                     onClick={(e) => handleDeleteClick(e, lecture.id, lecture.title)}
+                     title="Delete Lecture"
+                     aria-label="Delete Lecture"
+                   >
+                     <Trash2 className="w-3.5 h-3.5" />
+                   </button>
+                 </div>
+               </li>
             );
           })}
           {filteredLectures.length === 0 && (
