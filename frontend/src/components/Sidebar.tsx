@@ -48,7 +48,7 @@ export const Sidebar: React.FC = () => {
 
   return (
     <aside className={`sidebar ${isSidebarOpen ? '' : 'closed'}`}>
-      <div class="sidebar-header" className="sidebar-header">
+      <div className="sidebar-header">
         <div className="logo">
           <span className="logo-icon">
             <GraduationCap className="w-6 h-6" />
