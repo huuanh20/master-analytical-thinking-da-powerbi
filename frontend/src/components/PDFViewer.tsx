@@ -38,8 +38,11 @@ export const PDFViewer: React.FC = () => {
     );
   }
 
-  // File path resolved relative to the web application origin
-  const pdfUrl = `${activeLecture.filePath}`;
+  // File path resolved relative to the web application origin or backend depending on origin
+  const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5030';
+  const pdfUrl = activeLecture.filePath.startsWith('/api')
+    ? `${apiBaseUrl}${activeLecture.filePath}`
+    : activeLecture.filePath;
 
   return (
     <div className={`viewer-panel card glass-effect ${isFullscreen ? 'fullscreen' : ''}`}>

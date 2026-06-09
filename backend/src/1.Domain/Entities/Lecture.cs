@@ -12,6 +12,7 @@ public class Lecture : BaseEntity
     public required string LectureNumber { get; set; }
     public long SizeBytes { get; set; }
     public CourseStatus Status { get; set; } = CourseStatus.Unread;
+    public byte[]? PdfData { get; set; }
     
     // Navigation Property
     public Note? Note { get; set; }

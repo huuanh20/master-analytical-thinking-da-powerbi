@@ -20,6 +20,7 @@ interface AppState {
   fetchLectures: () => Promise<void>;
   updateLectureStatus: (id: string, status: CourseStatus) => Promise<void>;
   saveLectureNote: (id: string, content: string) => Promise<void>;
+  uploadLecture: (title: string, lectureNumber: string, file: File) => Promise<void>;
 }
 
 const mapStatusFromBE = (statusNum: number): CourseStatus => {
@@ -122,6 +123,30 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
     } catch (err) {
       console.error('Failed to save lecture notes', err);
+    }
+  },
+
+  uploadLecture: async (title, lectureNumber, file) => {
+    set({ isLoading: true, error: null });
+    try {
+      const formData = new FormData();
+      formData.append('title', title);
+      formData.append('lectureNumber', lectureNumber);
+      formData.append('file', file);
+
+      await api.post('/lectures', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      // Fetch lectures list again to show the newly uploaded lecture
+      const { fetchLectures } = get();
+      await fetchLectures();
+    } catch (err) {
+      console.error('Failed to upload PDF', err);
+      set({ error: 'Failed to upload PDF. Please make sure the Lecture Code is unique.', isLoading: false });
+      throw err;
     }
   },
 }));

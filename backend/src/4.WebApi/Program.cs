@@ -89,6 +89,58 @@ app.MapPost("/api/lectures/{id:guid}/notes", async (Guid id, SaveNoteRequest req
     return success ? Results.Ok(new { Message = "Note saved successfully" }) : Results.NotFound();
 });
 
+app.MapGet("/api/lectures/{id:guid}/pdf", async (Guid id, IMediator mediator) =>
+{
+    var query = new GetLecturePdfQuery(id);
+    var pdfBytes = await mediator.Send(query);
+    if (pdfBytes == null)
+    {
+        return Results.NotFound("PDF not found");
+    }
+    return Results.File(pdfBytes, "application/pdf");
+});
+
+app.MapPost("/api/lectures", async (
+    Microsoft.AspNetCore.Http.HttpRequest request,
+    IMediator mediator) =>
+{
+    if (!request.HasFormContentType)
+    {
+        return Results.BadRequest("Expected form content type");
+    }
+
+    var form = await request.ReadFormAsync();
+    var title = form["title"].ToString();
+    var lectureNumber = form["lectureNumber"].ToString();
+    var file = form.Files.GetFile("file");
+
+    if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(lectureNumber))
+    {
+        return Results.BadRequest("Title and Lecture Number are required");
+    }
+
+    if (file == null || file.Length == 0)
+    {
+        return Results.BadRequest("No file uploaded");
+    }
+
+    using var ms = new System.IO.MemoryStream();
+    await file.CopyToAsync(ms);
+    var fileBytes = ms.ToArray();
+
+    try
+    {
+        var command = new CreateLectureCommand(title, lectureNumber, file.FileName, fileBytes);
+        var id = await mediator.Send(command);
+        return Results.Created($"/api/lectures/{id}", new { Id = id });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { Message = ex.InnerException?.Message ?? ex.Message });
+    }
+})
+.DisableAntiforgery();
+
 app.Run();
 
 // DTO Requests

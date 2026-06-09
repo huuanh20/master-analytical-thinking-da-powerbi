@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import type { CourseStatus } from '../types';
-import { Search, GraduationCap, ChevronLeft, CheckCircle2, Circle, PlayCircle } from 'lucide-react';
+import { Search, GraduationCap, ChevronLeft, CheckCircle2, Circle, PlayCircle, Plus, X, FileUp } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
   const {
@@ -14,7 +14,51 @@ export const Sidebar: React.FC = () => {
     setFilter,
     setActiveLecture,
     toggleSidebar,
+    uploadLecture,
   } = useAppStore();
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newCode, setNewCode] = useState('');
+  const [newFile, setNewFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUploadSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTitle.trim() || !newCode.trim() || !newFile) {
+      setUploadError('Please fill all fields and select a PDF file.');
+      return;
+    }
+    setUploading(true);
+    setUploadError('');
+    try {
+      await uploadLecture(newTitle.trim(), newCode.trim(), newFile);
+      setIsModalOpen(false);
+      setNewTitle('');
+      setNewCode('');
+      setNewFile(null);
+    } catch (err: any) {
+      setUploadError('Failed to upload PDF. Please check the backend connection and ensure the Lecture Code is unique.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      if (file.type !== 'application/pdf') {
+        setUploadError('Only PDF files are supported.');
+        setNewFile(null);
+        return;
+      }
+      setNewFile(file);
+      setUploadError('');
+    }
+  };
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
@@ -117,6 +161,11 @@ export const Sidebar: React.FC = () => {
         </div>
       </div>
 
+      {/* Upload button */}
+      <button className="upload-btn" onClick={() => setIsModalOpen(true)}>
+        <Plus className="w-4 h-4" /> Add PDF Material
+      </button>
+
       {/* Navigation List */}
       <nav className="lecture-nav">
         <ul className="lecture-list">
@@ -148,6 +197,102 @@ export const Sidebar: React.FC = () => {
           )}
         </ul>
       </nav>
+
+      {/* Upload Modal Overlay */}
+      {isModalOpen && (
+        <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <span className="modal-title">
+                <FileUp className="w-5 h-5 text-indigo-500" />
+                Add New PDF Document
+              </span>
+              <button className="modal-close" onClick={() => setIsModalOpen(false)}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleUploadSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {uploadError && (
+                <div style={{ color: '#f87171', fontSize: '0.82rem', padding: '8px 12px', background: 'rgba(248, 113, 113, 0.1)', border: '1px solid rgba(248, 113, 113, 0.2)', borderRadius: '6px' }}>
+                  {uploadError}
+                </div>
+              )}
+              
+              <div className="form-group">
+                <label>Lecture Title</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Lecture 12: Advanced Row-Level Security"
+                  className="form-control"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  disabled={uploading}
+                  required
+                />
+              </div>
+              
+              <div className="form-group">
+                <label>Lecture Code / Number</label>
+                <input
+                  type="text"
+                  placeholder="e.g. L12"
+                  className="form-control"
+                  value={newCode}
+                  onChange={(e) => setNewCode(e.target.value)}
+                  disabled={uploading}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>PDF File</label>
+                <div 
+                  className="file-picker-container"
+                  onClick={() => !uploading && fileInputRef.current?.click()}
+                >
+                  <FileUp className="w-8 h-8 text-indigo-500" style={{ margin: '0 auto 8px auto', display: 'block' }} />
+                  {newFile ? (
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-main)', wordBreak: 'break-all' }}>
+                      {newFile.name}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      Click to choose a PDF file
+                    </span>
+                  )}
+                </div>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  accept="application/pdf"
+                  style={{ display: 'none' }}
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button 
+                  type="button" 
+                  className="btn" 
+                  onClick={() => setIsModalOpen(false)}
+                  disabled={uploading}
+                  style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)' }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn btn-primary"
+                  disabled={uploading}
+                >
+                  {uploading ? 'Uploading...' : 'Add Lecture'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </aside>
   );
 };
