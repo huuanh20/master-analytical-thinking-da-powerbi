@@ -16,11 +16,11 @@ Write-Host "2. Starting C# API in background..." -ForegroundColor Yellow
 $apiProcess = Start-Process dotnet -ArgumentList "run --project backend\src\4.WebApi\PowerBILearning.WebApi.csproj" -PassThru -WindowStyle Hidden
 
 # Wait for API to start
-Write-Host "Waiting for API to initialize (port 5194)..."
+Write-Host "Waiting for API to initialize (port 5030)..."
 $started = $false
 for ($i = 1; $i -le 10; $i++) {
     try {
-        $test = Invoke-RestMethod -Uri "http://localhost:5194/api/lectures" -Method Get -TimeoutSec 1
+        $test = Invoke-RestMethod -Uri "http://localhost:5030/api/lectures" -Method Get -TimeoutSec 1
         $started = $true
         break
     } catch {
@@ -38,7 +38,7 @@ Write-Host "API started successfully!" -ForegroundColor Green
 # 3. Test GET Lectures
 Write-Host "`n3. Testing GET /api/lectures..." -ForegroundColor Yellow
 try {
-    $lectures = Invoke-RestMethod -Uri "http://localhost:5194/api/lectures" -Method Get
+    $lectures = Invoke-RestMethod -Uri "http://localhost:5030/api/lectures" -Method Get
     Write-Host "Found $($lectures.Count) lectures in database:" -ForegroundColor Green
     foreach ($l in $lectures) {
         Write-Host "  - [$($l.lectureNumber)] $($l.title) (Status: $($l.status))"
@@ -59,7 +59,7 @@ try {
 Write-Host "`n4. Testing PUT /api/lectures/$targetLectureId/status..." -ForegroundColor Yellow
 try {
     $body = @{ status = 1 } | ConvertTo-Json # Status: Reading (1)
-    $response = Invoke-RestMethod -Uri "http://localhost:5194/api/lectures/$targetLectureId/status" -Method Put -Body $body -ContentType "application/json"
+    $response = Invoke-RestMethod -Uri "http://localhost:5030/api/lectures/$targetLectureId/status" -Method Put -Body $body -ContentType "application/json"
     Write-Host "Response: $($response.message)" -ForegroundColor Green
     Write-Host "PUT Status test PASSED!" -ForegroundColor Green
 } catch {
@@ -70,7 +70,7 @@ try {
 Write-Host "`n5. Testing POST /api/lectures/$targetLectureId/notes..." -ForegroundColor Yellow
 try {
     $body = @{ content = "This is a test note created by integration script." } | ConvertTo-Json
-    $response = Invoke-RestMethod -Uri "http://localhost:5194/api/lectures/$targetLectureId/notes" -Method Post -Body $body -ContentType "application/json"
+    $response = Invoke-RestMethod -Uri "http://localhost:5030/api/lectures/$targetLectureId/notes" -Method Post -Body $body -ContentType "application/json"
     Write-Host "Response: $($response.message)" -ForegroundColor Green
     Write-Host "POST Notes test PASSED!" -ForegroundColor Green
 } catch {
