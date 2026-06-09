@@ -33,12 +33,18 @@ graph TD
 
 ## Project Structure
 
-- `/src`: React source files (components, store, services, types).
-- `/public`: React public assets (including course PDFs in `/public/pdfs/`).
-- `/backend`: C# ASP.NET Core Clean Architecture backend API.
-- `/package.json`: Frontend package manager configuration.
-- `/tsconfig.json`: Frontend TypeScript project configuration.
-- `/vite.config.ts`: Vite build tool configuration.
+### Backend (C# Clean Architecture)
+- **`backend/src/1.Domain`**: Course Entities (`Lecture`, `Note`, `Progress`), Enums (`CourseStatus`), and Domain Exceptions.
+- **`backend/src/2.Application`**: Core business logic, MediatR Commands/Queries (CQRS), and database interface (`IApplicationDbContext`).
+- **`backend/src/3.Infrastructure`**: Persistence implementation (EF Core SQLite), database initialiser, and seeding data.
+- **`backend/src/4.WebApi`**: Entry point (`Program.cs`), Controllers/Endpoints, CORS policies, and AppSettings.
+
+### Frontend (React + Vite Feature-Based)
+- **`frontend/src/features`**: Lecture navigation list, status dropdown, search, notes autosave, and API connectors.
+- **`frontend/src/store`**: Global Zustand state store.
+- **`frontend/src/components`**: Shared UI component library.
+- **`frontend/src/services`**: Axios API endpoints configuration.
+- **`frontend/public/pdfs`**: Directory containing course PDFs.
 
 ---
 
@@ -61,15 +67,19 @@ graph TD
    *(On first run, the SQLite database `PowerBILearning.db` will be automatically created and populated with the 8 default Power BI course lectures).*
 
 ### Step 2: Run React Frontend
-1. Run this command in the **root** workspace directory:
+1. Navigate to the `frontend/` directory:
+   ```bash
+   cd frontend
+   ```
+2. Install npm dependencies:
    ```bash
    npm install
    ```
-2. Start the Vite dev server:
+3. Start the Vite dev server:
    ```bash
    npm run dev
    ```
-3. Open your browser and navigate to `http://localhost:5173`.
+4. Open your browser and navigate to `http://localhost:5173`.
 
 ---
 
@@ -80,11 +90,13 @@ Deploying to Vercel is extremely easy and free:
 1. Push this repository to **GitHub**.
 2. Go to the [Vercel Dashboard](https://vercel.com/) and click **Add New > Project**.
 3. Import your GitHub repository.
-4. Vercel will automatically detect **Vite** at the root of your repository and configure the build command (`npm run build`) and output directory (`dist`).
-5. Add an Environment Variable:
-   - Name: `VITE_API_URL`
-   - Value: `https://your-backend-api-url.onrender.com` (Your deployed C# API URL).
-6. Click **Deploy**.
+4. In the Project Configuration:
+   - Set **Root Directory** to `frontend`.
+   - Vercel will automatically detect **Vite** and configure the build command (`npm run build`) and output directory (`dist`).
+   - Add an Environment Variable:
+     - Name: `VITE_API_URL`
+     - Value: `https://your-backend-api-url.onrender.com` (Your deployed C# API URL).
+5. Click **Deploy**.
 
 ### 2. Backend (C#) to Render.com / Fly.io
 To host your C# API for free, you can use Render:
