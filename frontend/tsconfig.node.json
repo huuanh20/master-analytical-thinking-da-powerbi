@@ -5,7 +5,7 @@
     "module": "esnext",
     "types": ["node"],
     "skipLibCheck": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "noEmit": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,

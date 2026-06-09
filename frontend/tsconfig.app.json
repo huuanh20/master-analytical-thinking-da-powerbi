@@ -10,7 +10,8 @@
       "vite/client"
     ],
     "skipLibCheck": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
     "noEmit": true,
     "jsx": "react-jsx",
     "noUnusedLocals": true,
