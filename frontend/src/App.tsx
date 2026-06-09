@@ -11,7 +11,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     fetchLectures();
-  }, []);
+  }, [fetchLectures]);
 
   return (
     <div className="app-container">

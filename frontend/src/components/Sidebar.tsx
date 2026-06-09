@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAppStore } from '../store/useAppStore';
-import type { Lecture, CourseStatus } from '../types';
+import type { CourseStatus } from '../types';
 import { Search, GraduationCap, ChevronLeft, CheckCircle2, Circle, PlayCircle } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {

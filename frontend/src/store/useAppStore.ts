@@ -58,7 +58,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const response = await api.get('/lectures');
       // BE returns status as number (enum): 0 = Unread, 1 = Reading, 2 = Completed
-      const mappedLectures: Lecture[] = response.data.map((l: any) => ({
+      const mappedLectures: Lecture[] = (response.data as {
+        id: string;
+        title: string;
+        fileName: string;
+        filePath: string;
+        lectureNumber: string;
+        sizeBytes: number;
+        status: number;
+        noteContent: string;
+      }[]).map((l) => ({
         ...l,
         status: mapStatusFromBE(l.status),
       }));
@@ -73,7 +82,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         const updatedActive = mappedLectures.find(l => l.id === currentActive.id);
         if (updatedActive) set({ activeLecture: updatedActive });
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
       set({ error: 'Failed to fetch lectures. Please check if backend is running.', isLoading: false });
     }

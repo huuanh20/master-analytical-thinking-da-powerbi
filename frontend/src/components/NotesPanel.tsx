@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { PenSquare, Copy, Trash2, Check, Loader2 } from 'lucide-react';
 
@@ -7,48 +7,40 @@ export const NotesPanel: React.FC = () => {
   const [noteContent, setNoteContent] = useState('');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'idle'>('idle');
   
-  // Track if initial load is complete to prevent saving on first render
-  const isFirstRender = useRef(true);
-  const activeLectureIdRef = useRef<string | null>(null);
+  // Track the ID of the lecture currently in state to sync on change
+  const [currentLectureId, setCurrentLectureId] = useState<string | null>(null);
 
-  // Sync state when active lecture changes
-  useEffect(() => {
-    if (activeLecture) {
-      isFirstRender.current = true;
-      activeLectureIdRef.current = activeLecture.id;
-      setNoteContent(activeLecture.noteContent || '');
-      setSaveStatus('saved');
-    } else {
-      setNoteContent('');
-      setSaveStatus('idle');
-    }
-  }, [activeLecture?.id]);
+  // Sync state during render when the active lecture changes
+  if (activeLecture && activeLecture.id !== currentLectureId) {
+    setCurrentLectureId(activeLecture.id);
+    setNoteContent(activeLecture.noteContent || '');
+    setSaveStatus('saved');
+  } else if (!activeLecture && currentLectureId !== null) {
+    setCurrentLectureId(null);
+    setNoteContent('');
+    setSaveStatus('idle');
+  }
+
+  const activeLectureId = activeLecture?.id;
 
   // Debounced autosave
   useEffect(() => {
-    // If it's the initial render of a newly loaded lecture, skip saving
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
+    if (!activeLectureId) return;
 
-    if (!activeLecture) return;
-
-    setSaveStatus('saving');
+    // Only save if the status is marked as 'saving' (triggered by user typing)
+    if (saveStatus !== 'saving') return;
     
     const delayDebounceFn = setTimeout(async () => {
-      // Ensure we are saving notes for the correct lecture
-      if (activeLectureIdRef.current === activeLecture.id) {
-        await saveLectureNote(activeLecture.id, noteContent);
-        setSaveStatus('saved');
-      }
+      await saveLectureNote(activeLectureId, noteContent);
+      setSaveStatus('saved');
     }, 1000); // Save after 1 second of inactivity
 
     return () => clearTimeout(delayDebounceFn);
-  }, [noteContent, activeLecture?.id]);
+  }, [noteContent, activeLectureId, saveLectureNote, saveStatus]);
 
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setNoteContent(e.target.value);
+    setSaveStatus('saving');
   };
 
   const handleCopyNotes = async () => {
@@ -64,6 +56,7 @@ export const NotesPanel: React.FC = () => {
   const handleClearNotes = () => {
     if (window.confirm('Are you sure you want to clear your notes for this lecture?')) {
       setNoteContent('');
+      setSaveStatus('saving');
     }
   };
 
