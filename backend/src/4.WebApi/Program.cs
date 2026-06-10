@@ -13,30 +13,60 @@ using PowerBILearning.Application.Lectures.Queries;
 using PowerBILearning.Application.Lectures.Commands;
 using PowerBILearning.Application.Notes.Commands;
 using PowerBILearning.Domain.Enums;
+using PowerBILearning.WebApi.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add application and infrastructure layers
+// ─── Services ────────────────────────────────────────────────────────────────
+
+// Application and Infrastructure layers
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
-// Add Controllers/Endpoints support
+// SignalR for real-time WebSocket communication
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+    options.HandshakeTimeout = TimeSpan.FromSeconds(15);
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+    options.MaximumReceiveMessageSize = 102400; // 100 KB for notes
+});
+
+// Endpoints API explorer
 builder.Services.AddEndpointsApiExplorer();
 
-// Configure CORS
+// Configure request body size limit (50 MB for PDF uploads)
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 52_428_800; // 50 MB
+});
+builder.WebHost.ConfigureKestrel(serverOptions =>
+{
+    serverOptions.Limits.MaxRequestBodySize = 52_428_800; // 50 MB
+});
+
+// ─── CORS ────────────────────────────────────────────────────────────────────
+// Restrict to known frontend origins only — no wildcard allowed with SignalR credentials
+var allowedOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .Get<string[]>()
+    ?? ["http://localhost:5173", "http://localhost:4173", "http://localhost:3000"];
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
+    options.AddPolicy("FrontendPolicy", policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
-              .AllowAnyMethod();
+              .AllowAnyMethod()
+              .AllowCredentials(); // Required for SignalR WebSocket
     });
 });
 
 var app = builder.Build();
 
-// Run database migrations and seeding at startup
+// ─── Database Initialisation ──────────────────────────────────────────────────
 using (var scope = app.Services.CreateScope())
 {
     var initialiser = scope.ServiceProvider.GetRequiredService<ApplicationDbContextInitialiser>();
@@ -44,7 +74,8 @@ using (var scope = app.Services.CreateScope())
     await initialiser.SeedAsync();
 }
 
-app.UseCors("AllowAll");
+// ─── Middleware Pipeline ──────────────────────────────────────────────────────
+app.UseCors("FrontendPolicy");
 
 // Support HEAD requests (for uptime monitoring tools like UptimeRobot)
 app.Use(async (context, next) =>
@@ -54,20 +85,25 @@ app.Use(async (context, next) =>
         context.Request.Method = HttpMethods.Get;
         var originalBody = context.Response.Body;
         context.Response.Body = System.IO.Stream.Null;
-        try
-        {
-            await next();
-        }
-        finally
-        {
-            context.Response.Body = originalBody;
-        }
+        try { await next(); }
+        finally { context.Response.Body = originalBody; }
         return;
     }
     await next();
 });
 
-// Minimal APIs configuration
+// ─── Health Check ─────────────────────────────────────────────────────────────
+app.MapGet("/health", () => Results.Ok(new
+{
+    Status = "Healthy",
+    Timestamp = DateTime.UtcNow,
+    Version = "2.0.0"
+}));
+
+// ─── SignalR Hub ──────────────────────────────────────────────────────────────
+app.MapHub<LectureHub>("/hubs/lecture");
+
+// ─── Lecture API Endpoints ────────────────────────────────────────────────────
 app.MapGet("/api/lectures", async (IMediator mediator) =>
 {
     var query = new GetLecturesQuery();
@@ -84,7 +120,11 @@ app.MapPut("/api/lectures/{id:guid}/status", async (Guid id, UpdateStatusRequest
 
 app.MapPost("/api/lectures/{id:guid}/notes", async (Guid id, SaveNoteRequest request, IMediator mediator) =>
 {
-    var command = new SaveNoteCommand(id, request.Content);
+    if (request.Content != null && request.Content.Length > 500_000)
+    {
+        return Results.BadRequest(new { Message = "Note content exceeds maximum allowed size (500KB)." });
+    }
+    var command = new SaveNoteCommand(id, request.Content ?? string.Empty);
     var success = await mediator.Send(command);
     return success ? Results.Ok(new { Message = "Note saved successfully" }) : Results.NotFound();
 });
@@ -131,6 +171,16 @@ app.MapPost("/api/lectures", async (
         return Results.BadRequest("No file uploaded");
     }
 
+    if (!file.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase))
+    {
+        return Results.BadRequest("Only PDF files are accepted");
+    }
+
+    if (file.Length > 52_428_800)
+    {
+        return Results.BadRequest("PDF file size must not exceed 50 MB");
+    }
+
     using var ms = new System.IO.MemoryStream();
     await file.CopyToAsync(ms);
     var fileBytes = ms.ToArray();
@@ -150,6 +200,6 @@ app.MapPost("/api/lectures", async (
 
 app.Run();
 
-// DTO Requests
+// ─── DTOs ─────────────────────────────────────────────────────────────────────
 public record UpdateStatusRequest(CourseStatus Status);
-public record SaveNoteRequest(string Content);
+public record SaveNoteRequest(string? Content);

@@ -1,7 +1,12 @@
 import React, { useState, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import type { CourseStatus } from '../types';
-import { Search, GraduationCap, ChevronLeft, CheckCircle2, Circle, PlayCircle, Plus, X, FileUp, Trash2 } from 'lucide-react';
+import {
+  Search, GraduationCap, ChevronLeft, CheckCircle2, Circle, PlayCircle,
+  Plus, X, FileUp, Trash2, BookOpen, TrendingUp
+} from 'lucide-react';
+import { toast } from '../services/toast';
+import { confirm } from './ConfirmDialog';
 
 export const Sidebar: React.FC = () => {
   const {
@@ -24,13 +29,26 @@ export const Sidebar: React.FC = () => {
   const [newFile, setNewFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
-  
+  const [uploadProgress, setUploadProgress] = useState(0);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDeleteClick = async (e: React.MouseEvent, id: string, title: string) => {
     e.stopPropagation();
-    if (window.confirm(`Are you sure you want to delete "${title}"?`)) {
-      await deleteLecture(id);
+    const confirmed = await confirm({
+      title: 'Delete Lecture',
+      message: `Are you sure you want to permanently delete "${title}"? The PDF and all notes will be removed.`,
+      confirmText: 'Delete Permanently',
+      cancelText: 'Keep Lecture',
+      variant: 'danger',
+    });
+    if (confirmed) {
+      try {
+        await deleteLecture(id);
+        toast.success('Lecture deleted', `"${title}" has been removed`);
+      } catch {
+        toast.error('Delete failed', 'Could not delete the lecture. Please try again.');
+      }
     }
   };
 
@@ -42,14 +60,30 @@ export const Sidebar: React.FC = () => {
     }
     setUploading(true);
     setUploadError('');
+    setUploadProgress(0);
+
+    // Simulate progress for UX (real upload doesn't expose progress easily with axios here)
+    const progressInterval = setInterval(() => {
+      setUploadProgress((prev) => Math.min(prev + 15, 85));
+    }, 300);
+
     try {
       await uploadLecture(newTitle.trim(), newCode.trim(), newFile);
-      setIsModalOpen(false);
-      setNewTitle('');
-      setNewCode('');
-      setNewFile(null);
-    } catch (err: any) {
-      setUploadError('Failed to upload PDF. Please check the backend connection and ensure the Lecture Code is unique.');
+      setUploadProgress(100);
+      clearInterval(progressInterval);
+      setTimeout(() => {
+        setIsModalOpen(false);
+        setNewTitle('');
+        setNewCode('');
+        setNewFile(null);
+        setUploadProgress(0);
+      }, 400);
+      toast.success('Lecture added!', `"${newTitle}" is now available in your library`);
+    } catch {
+      clearInterval(progressInterval);
+      setUploadProgress(0);
+      setUploadError('Upload failed. Please check the backend is running and Lecture Code is unique.');
+      toast.error('Upload failed', 'Check that the Lecture Code is unique and backend is running.');
     } finally {
       setUploading(false);
     }
@@ -63,39 +97,38 @@ export const Sidebar: React.FC = () => {
         setNewFile(null);
         return;
       }
+      if (file.size > 52_428_800) {
+        setUploadError('PDF must be smaller than 50 MB.');
+        setNewFile(null);
+        return;
+      }
       setNewFile(file);
       setUploadError('');
     }
   };
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value);
-  };
-
   const getStatusIcon = (status: CourseStatus) => {
     switch (status) {
       case 'completed':
-        return <CheckCircle2 className="w-4 h-4 text-emerald-500 status-completed" style={{ color: 'var(--color-success)' }} />;
+        return <CheckCircle2 className="w-4 h-4" style={{ color: 'var(--color-success)' }} />;
       case 'reading':
-        return <PlayCircle className="w-4 h-4 text-amber-500 status-reading" style={{ color: 'var(--color-warning)' }} />;
+        return <PlayCircle className="w-4 h-4" style={{ color: 'var(--color-warning)' }} />;
       default:
-        return <Circle className="w-4 h-4 text-gray-500 status-unread" style={{ color: 'var(--text-dim)' }} />;
+        return <Circle className="w-4 h-4" style={{ color: 'var(--text-dim)' }} />;
     }
   };
 
-  // Filter and search logic
   const filteredLectures = lectures.filter((lecture) => {
     const matchesSearch =
       lecture.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       lecture.lectureNumber.toLowerCase().includes(searchTerm.toLowerCase());
-
     if (filter === 'all') return matchesSearch;
     return matchesSearch && lecture.status === filter;
   });
 
-  // Calculate progress stats
   const totalLectures = lectures.length;
   const completedLectures = lectures.filter((l) => l.status === 'completed').length;
+  const readingLectures = lectures.filter((l) => l.status === 'reading').length;
   const progressPercent = totalLectures > 0 ? Math.round((completedLectures / totalLectures) * 100) : 0;
 
   return (
@@ -115,17 +148,26 @@ export const Sidebar: React.FC = () => {
         </button>
       </div>
 
-      {/* Progress Summary Card */}
+      {/* Enhanced Progress Card */}
       <div className="progress-card">
         <div className="progress-card-header">
-          <span>Overall Progress</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <TrendingUp className="w-3.5 h-3.5" style={{ color: 'var(--color-primary)' }} />
+            <span>Overall Progress</span>
+          </div>
           <span className="progress-percent">{progressPercent}%</span>
         </div>
         <div className="progress-bar-container">
-          <div className="progress-bar-fill" style={{ width: `${progressPercent}%` }}></div>
+          <div className="progress-bar-fill" style={{ width: `${progressPercent}%` }} />
         </div>
         <div className="progress-stats">
-          <span>{completedLectures}/{totalLectures} Completed</span>
+          <span>
+            <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>{completedLectures}</span> done
+            {' · '}
+            <span style={{ color: 'var(--color-warning)', fontWeight: 600 }}>{readingLectures}</span> in progress
+            {' · '}
+            {totalLectures} total
+          </span>
         </div>
       </div>
 
@@ -137,44 +179,38 @@ export const Sidebar: React.FC = () => {
             type="text"
             placeholder="Search lectures..."
             value={searchTerm}
-            onChange={handleSearchChange}
+            onChange={(e) => setSearchTerm(e.target.value)}
             aria-label="Search lectures"
           />
+          {searchTerm && (
+            <button
+              className="search-clear-btn"
+              onClick={() => setSearchTerm('')}
+              aria-label="Clear search"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
         <div className="filter-tabs">
-          <button
-            className={`filter-tab ${filter === 'all' ? 'active' : ''}`}
-            onClick={() => setFilter('all')}
-          >
-            All
-          </button>
-          <button
-            className={`filter-tab ${filter === 'unread' ? 'active' : ''}`}
-            onClick={() => setFilter('unread')}
-          >
-            Unread
-          </button>
-          <button
-            className={`filter-tab ${filter === 'reading' ? 'active' : ''}`}
-            onClick={() => setFilter('reading')}
-          >
-            Study
-          </button>
-          <button
-            className={`filter-tab ${filter === 'completed' ? 'active' : ''}`}
-            onClick={() => setFilter('completed')}
-          >
-            Done
-          </button>
+          {(['all', 'unread', 'reading', 'completed'] as const).map((f) => (
+            <button
+              key={f}
+              className={`filter-tab ${filter === f ? 'active' : ''}`}
+              onClick={() => setFilter(f)}
+            >
+              {f === 'all' ? 'All' : f === 'unread' ? 'New' : f === 'reading' ? 'Active' : 'Done'}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Upload button */}
+      {/* Upload Button */}
       <button className="upload-btn" onClick={() => setIsModalOpen(true)}>
         <Plus className="w-4 h-4" /> Add PDF Material
       </button>
 
-      {/* Navigation List */}
+      {/* Lecture List */}
       <nav className="lecture-nav">
         <ul className="lecture-list">
           {filteredLectures.map((lecture) => {
@@ -184,6 +220,12 @@ export const Sidebar: React.FC = () => {
                 key={lecture.id}
                 className={`lecture-item ${isActive ? 'active' : ''}`}
                 onClick={() => setActiveLecture(lecture)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') setActiveLecture(lecture);
+                }}
+                aria-current={isActive ? 'page' : undefined}
               >
                 <div className="lecture-item-left">
                   <div className="lecture-badge">{lecture.lectureNumber}</div>
@@ -191,52 +233,64 @@ export const Sidebar: React.FC = () => {
                     <span className="lecture-title-text" title={lecture.title}>
                       {lecture.title}
                     </span>
-                    <span className="lecture-meta">Lecture File</span>
+                    <span className="lecture-meta">
+                      {lecture.sizeBytes > 0
+                        ? `${(lecture.sizeBytes / 1024 / 1024).toFixed(1)} MB`
+                        : 'PDF file'
+                      }
+                      {lecture.noteContent ? ' · Has notes' : ''}
+                    </span>
                   </div>
                 </div>
-                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                   {getStatusIcon(lecture.status)}
-                   <button 
-                     className="delete-item-btn" 
-                     onClick={(e) => handleDeleteClick(e, lecture.id, lecture.title)}
-                     title="Delete Lecture"
-                     aria-label="Delete Lecture"
-                   >
-                     <Trash2 className="w-3.5 h-3.5" />
-                   </button>
-                 </div>
-               </li>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {getStatusIcon(lecture.status)}
+                  <button
+                    className="delete-item-btn"
+                    onClick={(e) => handleDeleteClick(e, lecture.id, lecture.title)}
+                    title="Delete Lecture"
+                    aria-label={`Delete ${lecture.title}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </li>
             );
           })}
           {filteredLectures.length === 0 && (
-            <li className="lecture-placeholder-text" style={{ padding: '20px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '0.85rem' }}>
-              No lectures found
+            <li className="lecture-placeholder-text" style={{ padding: '32px 20px', textAlign: 'center' }}>
+              <BookOpen className="w-8 h-8" style={{ margin: '0 auto 12px', opacity: 0.3 }} />
+              <div style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>
+                {searchTerm ? `No lectures match "${searchTerm}"` : 'No lectures found'}
+              </div>
             </li>
           )}
         </ul>
       </nav>
 
-      {/* Upload Modal Overlay */}
+      {/* Upload Modal */}
       {isModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
+        <div className="modal-overlay" onClick={() => !uploading && setIsModalOpen(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <span className="modal-title">
-                <FileUp className="w-5 h-5 text-indigo-500" />
-                Add New PDF Document
+                <FileUp className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
+                Add New PDF Lecture
               </span>
-              <button className="modal-close" onClick={() => setIsModalOpen(false)}>
+              <button
+                className="modal-close"
+                onClick={() => !uploading && setIsModalOpen(false)}
+                disabled={uploading}
+                aria-label="Close"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <form onSubmit={handleUploadSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {uploadError && (
-                <div style={{ color: '#f87171', fontSize: '0.82rem', padding: '8px 12px', background: 'rgba(248, 113, 113, 0.1)', border: '1px solid rgba(248, 113, 113, 0.2)', borderRadius: '6px' }}>
-                  {uploadError}
-                </div>
+                <div className="upload-error-msg">{uploadError}</div>
               )}
-              
+
               <div className="form-group">
                 <label>Lecture Title</label>
                 <input
@@ -249,9 +303,9 @@ export const Sidebar: React.FC = () => {
                   required
                 />
               </div>
-              
+
               <div className="form-group">
-                <label>Lecture Code / Number</label>
+                <label>Lecture Code</label>
                 <input
                   type="text"
                   placeholder="e.g. L12"
@@ -265,18 +319,18 @@ export const Sidebar: React.FC = () => {
 
               <div className="form-group">
                 <label>PDF File</label>
-                <div 
-                  className="file-picker-container"
+                <div
+                  className={`file-picker-container ${newFile ? 'has-file' : ''}`}
                   onClick={() => !uploading && fileInputRef.current?.click()}
                 >
-                  <FileUp className="w-8 h-8 text-indigo-500" style={{ margin: '0 auto 8px auto', display: 'block' }} />
+                  <FileUp className="w-8 h-8" style={{ margin: '0 auto 8px', display: 'block', color: 'var(--color-primary)' }} />
                   {newFile ? (
-                    <span style={{ fontSize: '0.85rem', color: 'var(--text-main)', wordBreak: 'break-all' }}>
-                      {newFile.name}
+                    <span style={{ fontSize: '0.85rem', color: 'var(--color-success)', wordBreak: 'break-all', fontWeight: 600 }}>
+                      ✓ {newFile.name}
                     </span>
                   ) : (
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                      Click to choose a PDF file
+                      Click to choose a PDF file (max 50 MB)
                     </span>
                   )}
                 </div>
@@ -289,22 +343,28 @@ export const Sidebar: React.FC = () => {
                 />
               </div>
 
+              {/* Upload Progress Bar */}
+              {uploading && (
+                <div className="upload-progress">
+                  <div className="upload-progress-bar">
+                    <div className="upload-progress-fill" style={{ width: `${uploadProgress}%` }} />
+                  </div>
+                  <span className="upload-progress-label">{uploadProgress}%</span>
+                </div>
+              )}
+
               <div className="modal-actions">
-                <button 
-                  type="button" 
-                  className="btn" 
-                  onClick={() => setIsModalOpen(false)}
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => !uploading && setIsModalOpen(false)}
                   disabled={uploading}
                   style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)' }}
                 >
                   Cancel
                 </button>
-                <button 
-                  type="submit" 
-                  className="btn btn-primary"
-                  disabled={uploading}
-                >
-                  {uploading ? 'Uploading...' : 'Add Lecture'}
+                <button type="submit" className="btn btn-primary" disabled={uploading}>
+                  {uploading ? `Uploading... ${uploadProgress}%` : 'Add Lecture'}
                 </button>
               </div>
             </form>

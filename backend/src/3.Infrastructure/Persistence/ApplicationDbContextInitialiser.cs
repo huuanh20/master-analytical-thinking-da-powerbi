@@ -24,6 +24,16 @@ public class ApplicationDbContextInitialiser
         try
         {
             await _context.Database.EnsureCreatedAsync();
+            
+            // Enable WAL mode for SQLite — critical for data durability
+            // WAL = Write-Ahead Logging: reads don't block writes, data survives crashes
+            await _context.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;");
+            await _context.Database.ExecuteSqlRawAsync("PRAGMA synchronous=NORMAL;");
+            await _context.Database.ExecuteSqlRawAsync("PRAGMA foreign_keys=ON;");
+            await _context.Database.ExecuteSqlRawAsync("PRAGMA cache_size=-32000;"); // 32MB cache
+            await _context.Database.ExecuteSqlRawAsync("PRAGMA temp_store=MEMORY;");
+            
+            _logger.LogInformation("Database initialised with WAL mode enabled for maximum durability.");
         }
         catch (Exception ex)
         {

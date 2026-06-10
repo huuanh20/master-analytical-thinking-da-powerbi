@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Lecture, CourseStatus } from '../types';
 import { api } from '../services/api';
+import { toast } from '../services/toast';
 
 interface AppState {
   lectures: Lecture[];
@@ -16,7 +17,7 @@ interface AppState {
   setActiveLecture: (lecture: Lecture | null) => void;
   toggleSidebar: () => void;
   setSidebarOpen: (isOpen: boolean) => void;
-  
+
   fetchLectures: () => Promise<void>;
   updateLectureStatus: (id: string, status: CourseStatus) => Promise<void>;
   saveLectureNote: (id: string, content: string) => Promise<void>;
@@ -40,6 +41,12 @@ const mapStatusToBE = (status: CourseStatus): number => {
   }
 };
 
+const STATUS_LABELS: Record<CourseStatus, string> = {
+  unread: 'Unread',
+  reading: 'In Progress',
+  completed: 'Completed',
+};
+
 export const useAppStore = create<AppState>((set, get) => ({
   lectures: [],
   activeLecture: null,
@@ -59,7 +66,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const response = await api.get('/lectures');
-      // BE returns status as number (enum): 0 = Unread, 1 = Reading, 2 = Completed
       const mappedLectures: Lecture[] = (response.data as {
         id: string;
         title: string;
@@ -75,55 +81,67 @@ export const useAppStore = create<AppState>((set, get) => ({
       }));
       set({ lectures: mappedLectures, isLoading: false });
 
-      // Auto select first lecture if none selected
+      // Auto-select first lecture if none selected
       const currentActive = get().activeLecture;
       if (!currentActive && mappedLectures.length > 0) {
         set({ activeLecture: mappedLectures[0] });
       } else if (currentActive) {
-        // Sync active lecture state with updated list
-        const updatedActive = mappedLectures.find(l => l.id === currentActive.id);
+        // Sync active lecture with updated data
+        const updatedActive = mappedLectures.find((l) => l.id === currentActive.id);
         if (updatedActive) set({ activeLecture: updatedActive });
       }
     } catch (err) {
       console.error(err);
-      set({ error: 'Failed to fetch lectures. Please check if backend is running.', isLoading: false });
+      set({
+        error: 'Failed to fetch lectures. Please check if backend is running on port 5030.',
+        isLoading: false,
+      });
     }
   },
 
   updateLectureStatus: async (id, status) => {
+    // Optimistic update — update UI immediately before API call
+    const prevState = get();
+    set((state) => {
+      const updatedLectures = state.lectures.map((l) =>
+        l.id === id ? { ...l, status } : l
+      );
+      const updatedActive = state.activeLecture?.id === id
+        ? { ...state.activeLecture, status }
+        : state.activeLecture;
+      return { lectures: updatedLectures, activeLecture: updatedActive };
+    });
+
     try {
       const statusValue = mapStatusToBE(status);
       await api.put(`/lectures/${id}/status`, { status: statusValue });
-      
-      set((state) => {
-        const updatedLectures = state.lectures.map((l) =>
-          l.id === id ? { ...l, status } : l
-        );
-        const updatedActive = state.activeLecture && state.activeLecture.id === id 
-          ? { ...state.activeLecture, status } 
-          : state.activeLecture;
-        return { lectures: updatedLectures, activeLecture: updatedActive };
-      });
+      toast.success(`Status updated`, `Marked as "${STATUS_LABELS[status]}"`, 2000);
     } catch (err) {
+      // Rollback on error
       console.error('Failed to update lecture status', err);
+      set({
+        lectures: prevState.lectures,
+        activeLecture: prevState.activeLecture,
+      });
+      toast.error('Update failed', 'Could not update lecture status. Please try again.');
     }
   },
 
   saveLectureNote: async (id, content) => {
     try {
       await api.post(`/lectures/${id}/notes`, { content });
-      
       set((state) => {
         const updatedLectures = state.lectures.map((l) =>
           l.id === id ? { ...l, noteContent: content } : l
         );
-        const updatedActive = state.activeLecture && state.activeLecture.id === id
+        const updatedActive = state.activeLecture?.id === id
           ? { ...state.activeLecture, noteContent: content }
           : state.activeLecture;
         return { lectures: updatedLectures, activeLecture: updatedActive };
       });
     } catch (err) {
       console.error('Failed to save lecture notes', err);
+      throw err; // Let NotesPanel handle the error with toast
     }
   },
 
@@ -136,14 +154,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       formData.append('file', file);
 
       await api.post('/lectures', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      // Fetch lectures list again to show the newly uploaded lecture
-      const { fetchLectures } = get();
-      await fetchLectures();
+      // Re-fetch to get the new lecture
+      await get().fetchLectures();
     } catch (err) {
       console.error('Failed to upload PDF', err);
       set({ error: 'Failed to upload PDF. Please make sure the Lecture Code is unique.', isLoading: false });
@@ -152,22 +167,25 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   deleteLecture: async (id) => {
-    set({ isLoading: true, error: null });
+    // Optimistic update
+    const prevState = get();
+    set((state) => {
+      const updatedLectures = state.lectures.filter((l) => l.id !== id);
+      let updatedActive = state.activeLecture;
+      if (state.activeLecture?.id === id) {
+        updatedActive = updatedLectures.length > 0 ? updatedLectures[0] : null;
+      }
+      return { lectures: updatedLectures, activeLecture: updatedActive };
+    });
+
     try {
       await api.delete(`/lectures/${id}`);
-      
-      set((state) => {
-        const updatedLectures = state.lectures.filter((l) => l.id !== id);
-        let updatedActive = state.activeLecture;
-        if (state.activeLecture && state.activeLecture.id === id) {
-          // If deleted active lecture, select the first remaining one or null
-          updatedActive = updatedLectures.length > 0 ? updatedLectures[0] : null;
-        }
-        return { lectures: updatedLectures, activeLecture: updatedActive, isLoading: false };
-      });
     } catch (err) {
+      // Rollback on error
       console.error('Failed to delete lecture', err);
-      set({ error: 'Failed to delete lecture. Please try again.', isLoading: false });
+      set({ lectures: prevState.lectures, activeLecture: prevState.activeLecture });
+      toast.error('Delete failed', 'Could not delete the lecture. Please try again.');
+      throw err;
     }
   },
 }));
