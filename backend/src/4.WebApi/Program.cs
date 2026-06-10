@@ -47,11 +47,22 @@ builder.WebHost.ConfigureKestrel(serverOptions =>
 });
 
 // ─── CORS ────────────────────────────────────────────────────────────────────
-// Restrict to known frontend origins only — no wildcard allowed with SignalR credentials
+// AllowedOrigins can be configured via appsettings.json or environment variables
+// Default includes both local dev URLs and the known Vercel production frontend
 var allowedOrigins = builder.Configuration
     .GetSection("Cors:AllowedOrigins")
     .Get<string[]>()
-    ?? ["http://localhost:5173", "http://localhost:4173", "http://localhost:3000"];
+    ?? [
+        // Local development
+        "http://localhost:5173",
+        "http://localhost:4173",
+        "http://localhost:3000",
+        // Vercel production deployments
+        "https://master-analytical-thinking-da-power.vercel.app",
+        "https://master-analytical-thinking-da-powerbi.vercel.app",
+        // Allow all vercel.app subdomains for preview deployments
+        "https://master-analytical-thinking-da-power-git-master-huuanh20s-projects.vercel.app",
+       ];
 
 builder.Services.AddCors(options =>
 {

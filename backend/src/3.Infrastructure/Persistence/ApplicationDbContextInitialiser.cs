@@ -99,8 +99,12 @@ public class ApplicationDbContextInitialiser
 
         foreach (var def in defaultLectures)
         {
-            if (!await _context.Lectures.AnyAsync(l => l.LectureNumber == def.Number))
+            var existing = await _context.Lectures
+                .FirstOrDefaultAsync(l => l.LectureNumber == def.Number);
+
+            if (existing == null)
             {
+                // New lecture — insert with correct static file path
                 byte[]? pdfBytes = null;
                 long sizeBytes = 0;
 
@@ -119,20 +123,30 @@ public class ApplicationDbContextInitialiser
                     }
                 }
 
-                var lecture = new Lecture
+                _context.Lectures.Add(new Lecture
                 {
                     Id = Guid.NewGuid(),
                     LectureNumber = def.Number,
                     Title = def.Title,
                     FileName = def.FileName,
-                    FilePath = "/placeholder", // will be updated below
+                    // Use static /pdfs/ path — served by Vercel CDN (no backend needed for PDF serving)
+                    FilePath = $"/pdfs/{def.FileName}",
                     SizeBytes = sizeBytes,
                     Status = CourseStatus.Unread,
                     PdfData = pdfBytes
-                };
-                lecture.FilePath = $"/api/lectures/{lecture.Id}/pdf";
+                });
+            }
+            else if (!existing.FilePath.StartsWith("/pdfs/"))
+            {
+                // Existing lecture has old /api/lectures/{guid}/pdf format — migrate to static path
+                _logger.LogInformation(
+                    "Migrating lecture {Number} FilePath: {Old} → /pdfs/{File}",
+                    def.Number, existing.FilePath, def.FileName);
+                existing.FilePath = $"/pdfs/{def.FileName}";
 
-                _context.Lectures.Add(lecture);
+                // Also update FileName if it's wrong
+                if (string.IsNullOrEmpty(existing.FileName))
+                    existing.FileName = def.FileName;
             }
         }
 
